@@ -1,0 +1,43 @@
+    /* src/index.css */
+
+    /* Import a custom font like Inter from Google Fonts for a clean, modern look */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+      /* Dark radial gradient for a sophisticated background */
+      background: radial-gradient(circle at top left, #1a202c, #0f172a);
+      min-height: 100vh;
+      color: #E2E8F0; /* Light gray text for dark background */
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      box-sizing: border-box; /* Ensure padding and border are included in element's total width and height */
+    }
+
+    /* Base box-sizing for all elements */
+    *, *::before, *::after {
+      box-sizing: inherit;
+    }
+
+    /* Custom scrollbar for better aesthetics */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 8px; /* Width of the scrollbar */
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #2D3748; /* Darker track for contrast */
+      border-radius: 10px; /* Rounded corners for the track */
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #6366F1; /* Indigo for the thumb */
+      border-radius: 10px; /* Rounded corners for the thumb */
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #3730A3; /* Darker indigo on hover */
+    }
+    
