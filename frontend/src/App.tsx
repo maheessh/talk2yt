@@ -334,7 +334,6 @@ const App: React.FC = () => {
                   description={videoData.description}
                   summary={videoData.summary}
                   topics={videoData.topics}
-                  onTopicClick={handleTopicClick}
                 />
               </>
             ) : (
