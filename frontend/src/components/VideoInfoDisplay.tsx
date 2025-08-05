@@ -1,6 +1,5 @@
-// src/components/VideoInfoDisplay.tsx
 import React, { useState } from 'react';
-import { Card, Title, Text, Divider, Group, Stack, UnstyledButton } from '@mantine/core';
+import { Card, Title, Text, Divider, Group, Stack, UnstyledButton, Badge } from '@mantine/core';
 import { BookOpen, Tag, ChevronDown, ChevronUp } from 'lucide-react';
 
 // Define the component's props
@@ -8,26 +7,26 @@ interface VideoInfoDisplayProps {
   title: string;
   description: string;
   summary?: string;
-  // RE-ADDED: topics prop to display key topics from the video
   topics?: string[];
+  onTopicClick: (topic: string) => void;
 }
 
 // A reusable component for creating consistent sections (e.g., Summary, Topics)
 const InfoSection: React.FC<{ icon: React.ReactNode; title: string; children: React.ReactNode }> = ({ icon, title, children }) => (
-    <>
-        <Divider my="lg" style={(theme) => ({ borderColor: theme.colors.dark[7] })} />
-        <Stack gap="md">
-            <Group gap="sm" align="center">
-                {icon}
-                <Title order={4} c="dimmed">{title}</Title>
-            </Group>
-            <div>{children}</div>
-        </Stack>
-    </>
+  <>
+    <Divider my="lg" style={(theme) => ({ borderColor: theme.colors.dark[7] })} />
+    <Stack gap="md">
+      <Group gap="sm" align="center">
+        {icon}
+        <Title order={4} c="dimmed">{title}</Title>
+      </Group>
+      <div>{children}</div>
+    </Stack>
+  </>
 );
 
 
-const VideoInfoDisplay: React.FC<VideoInfoDisplayProps> = ({ title, description, summary, topics }) => {
+const VideoInfoDisplay: React.FC<VideoInfoDisplayProps> = ({ title, description, summary, topics, onTopicClick }) => {
   const [isDescriptionExpanded, setDescriptionExpanded] = useState(false);
 
   return (
@@ -53,14 +52,14 @@ const VideoInfoDisplay: React.FC<VideoInfoDisplayProps> = ({ title, description,
           {description}
         </Text>
         {description.length > 150 && ( // Only show button if description is long enough
-            <UnstyledButton onClick={() => setDescriptionExpanded((v) => !v)} style={(theme) => ({ alignSelf: 'flex-start' })}>
-                <Group gap="xs" align="center">
-                    <Text c="indigo.3" fw={500} size="sm">
-                        {isDescriptionExpanded ? 'Show less' : 'Show more'}
-                    </Text>
-                    {isDescriptionExpanded ? <ChevronUp size={16} color="#818CF8" /> : <ChevronDown size={16} color="#818CF8" />}
-                </Group>
-            </UnstyledButton>
+          <UnstyledButton onClick={() => setDescriptionExpanded((v) => !v)} style={{ alignSelf: 'flex-start' }}>
+            <Group gap="xs" align="center">
+              <Text c="indigo.3" fw={500} size="sm">
+                {isDescriptionExpanded ? 'Show less' : 'Show more'}
+              </Text>
+              {isDescriptionExpanded ? <ChevronUp size={16} color="#818CF8" /> : <ChevronDown size={16} color="#818CF8" />}
+            </Group>
+          </UnstyledButton>
         )}
       </Stack>
 
@@ -73,12 +72,23 @@ const VideoInfoDisplay: React.FC<VideoInfoDisplayProps> = ({ title, description,
         </InfoSection>
       )}
 
-      {/* RE-ADDED: Key Topics section, displayed as a simple text list */}
+      {/* Key Topics section, displayed as clickable badges */}
       {topics && topics.length > 0 && (
         <InfoSection icon={<Tag size={20} color="#818CF8" />} title="Key Topics">
-            <Text c="gray.4" style={{ lineHeight: 1.7 }}>
-                {topics.join(' • ')}
-            </Text>
+          <Group gap="xs">
+            {topics.map((topic) => (
+              <Badge
+                key={topic}
+                component="button"
+                onClick={() => onTopicClick(topic)}
+                variant="light"
+                color="indigo"
+                size="lg"
+              >
+                {topic}
+              </Badge>
+            ))}
+          </Group>
         </InfoSection>
       )}
     </Card>
