@@ -77,13 +77,29 @@ const App: React.FC = () => {
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
 
   // === ADDED: track player readiness to avoid seek errors
-  const playerReadyRef = useRef<boolean>(false);
 
   // Responsive check for layout
   const isLargeScreen = useMediaQuery("(min-width: 1024px)");
 
-  // Function to load YouTube Iframe Player API script
+  // Track readiness + queued seeks without touching `window`
+  const playerReadyRef = useRef<boolean>(false);
+  const readyWaitersRef = useRef<Array<() => void>>([]);
+  const pendingSeekRef = useRef<number | null>(null);
+
+  // REPLACE your current useEffect that loads & creates the YT player with this:
   useEffect(() => {
+    // mark all waiters as ready
+    const resolveReady = () => {
+      playerReadyRef.current = true;
+      const waiters = [...readyWaitersRef.current];
+      readyWaitersRef.current.length = 0;
+      waiters.forEach((fn) => {
+        try {
+          fn();
+        } catch {}
+      });
+    };
+
     const loadYouTubeAPI = () => {
       if (!window.YT && !document.getElementById("youtube-iframe-api")) {
         const tag = document.createElement("script");
@@ -94,91 +110,157 @@ const App: React.FC = () => {
       }
     };
 
-    loadYouTubeAPI();
+    const createPlayer = () => {
+      if (!videoData?.videoId) return;
 
-    window.onYouTubeIframeAPIReady = () => {
-      if (videoData?.videoId) {
-        if (playerRef.current) {
+      // destroy old
+      if (playerRef.current?.destroy) {
+        try {
           playerRef.current.destroy();
-        }
-        playerRef.current = new window.YT.Player("youtube-player", {
-          videoId: videoData.videoId,
-          events: {
-            onReady: (event: any) => {
-              playerReadyRef.current = true; // === ADDED
-              console.log("YouTube Player Ready:", event.target);
-            },
-            onStateChange: (event: any) =>
-              console.log("YouTube Player State Change:", event.data),
-          },
-          // === ADDED: nicer defaults
-          playerVars: {
-            rel: 0,
-            modestbranding: 1,
-            origin: window.location.origin,
-          },
-        });
+        } catch {}
+        playerRef.current = null;
       }
-    };
 
-    if (window.YT && videoData?.videoId) {
-      if (playerRef.current) {
-        playerRef.current.destroy();
-      }
+      // reset readiness for this instance
+      playerReadyRef.current = false;
+
       playerRef.current = new window.YT.Player("youtube-player", {
         videoId: videoData.videoId,
-        events: {
-          onReady: (event: any) => {
-            playerReadyRef.current = true; // === ADDED
-            console.log("YouTube Player Ready:", event.target);
-          },
-          onStateChange: (event: any) =>
-            console.log("YouTube Player State Change:", event.data),
-        },
-        // === ADDED: nicer defaults
         playerVars: {
+          enablejsapi: 1,
+          origin: window.location.origin,
           rel: 0,
           modestbranding: 1,
-          origin: window.location.origin,
+          iv_load_policy: 3,
+        },
+        events: {
+          onReady: (event: any) => {
+            console.log("YouTube Player Ready:", event.target);
+            resolveReady();
+
+            // flush any queued seek
+            if (pendingSeekRef.current != null) {
+              try {
+                event.target.seekTo(pendingSeekRef.current, true);
+                event.target.playVideo?.();
+              } catch (e) {
+                console.warn("Flushing queued seek failed:", e);
+              }
+              pendingSeekRef.current = null;
+            }
+          },
+          onStateChange: (event: any) => {
+            console.log("YouTube Player State Change:", event.data);
+          },
+          onError: (err: any) => {
+            console.error("YouTube Player Error:", err);
+          },
         },
       });
+    };
+
+    loadYouTubeAPI();
+
+    if (window.YT?.Player) {
+      createPlayer();
+    } else {
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        try {
+          prev && prev();
+        } catch {}
+        createPlayer();
+      };
     }
 
     return () => {
-      if (
-        playerRef.current &&
-        typeof playerRef.current.destroy === "function"
-      ) {
-        playerRef.current.destroy();
+      if (playerRef.current?.destroy) {
+        try {
+          playerRef.current.destroy();
+        } catch {}
         playerRef.current = null;
       }
-      playerReadyRef.current = false; // === ADDED
-      delete window.onYouTubeIframeAPIReady;
     };
   }, [videoData?.videoId]);
 
-  const seekVideo = useCallback((seconds: number) => {
-    if (
-      playerRef.current &&
-      typeof playerRef.current.seekTo === "function" &&
-      playerReadyRef.current
-    ) {
-      playerRef.current.seekTo(seconds, true);
-      playerRef.current.playVideo?.();
-    } else {
-      console.warn(
-        "YouTube Player not ready or seekTo function not available."
-      );
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString() + "seek_err",
-          sender: "ai",
-          text: "Video player not ready to seek. Please ensure the video is loaded and the YouTube Player API has initialized.",
-        },
-      ]);
-    }
-  }, []);
+  // helper for pretty timestamps
+  const toHMS = (total: number) => {
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = Math.floor(total % 60);
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(
+      2,
+      "0"
+    )}:${String(s).padStart(2, "0")}`;
+  };
+
+  // REPLACE your existing seekVideo with this robust version:
+  const seekVideo = useCallback(
+    async (seconds: number) => {
+      // share the same refs we created in the useEffect above
+      // @ts-ignore
+      const playerReadyRef = (window.__yt_playerReadyRef as {
+        current: boolean;
+      }) ?? { current: false };
+      // @ts-ignore
+      const readyWaitersRef = (window.__yt_readyWaitersRef as {
+        current: Array<() => void>;
+      }) ?? { current: [] };
+      // @ts-ignore
+      const pendingSeekRef = (window.__yt_pendingSeekRef as {
+        current: number | null;
+      }) ?? { current: null };
+
+      const waitUntilReady = () =>
+        playerReadyRef.current
+          ? Promise.resolve()
+          : new Promise<void>((res) => readyWaitersRef.current.push(res));
+
+      // If player object isn’t there yet, queue it and inform the user once (friendly)
+      if (!window.YT || !playerRef.current) {
+        pendingSeekRef.current = seconds;
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString() + "queued_jump",
+            sender: "ai",
+            text: `Player is initializing — I’ll jump to [${toHMS(
+              seconds
+            )}] as soon as it’s ready.`,
+          },
+        ]);
+        return;
+      }
+
+      // If player exists but not yet ready, queue and wait
+      if (!playerReadyRef.current) {
+        pendingSeekRef.current = seconds;
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString() + "queued_jump2",
+            sender: "ai",
+            text: `Queued jump to [${toHMS(seconds)}] — just finishing setup…`,
+          },
+        ]);
+        await waitUntilReady();
+      }
+
+      try {
+        if (typeof playerRef.current.seekTo === "function") {
+          playerRef.current.seekTo(seconds, true);
+          playerRef.current.playVideo?.();
+        } else {
+          // very rare: methods not present yet — queue
+          pendingSeekRef.current = seconds;
+        }
+      } catch (e) {
+        console.warn("Seek failed; queuing for retry:", e);
+        pendingSeekRef.current = seconds;
+      }
+    },
+    [setChatMessages]
+  );
 
   const handleLoadVideo = async (url: string) => {
     setVideoUrl(url);
@@ -566,9 +648,8 @@ const App: React.FC = () => {
                   {/* Replace the <Card>…<div id="youtube-player" />…</Card> with: */}
                   <VideoPlayer
                     videoId={videoData.videoId}
-                    startSeconds={undefined /* you can pass a number */}
-                    autoPlay={false}
                     title={videoData.title}
+                    autoPlay={false}
                   />
 
                   <VideoInfoDisplay
