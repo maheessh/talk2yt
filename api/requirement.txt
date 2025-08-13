@@ -1,0 +1,7 @@
+# api/requirements.txt
+Flask
+Flask-Cors
+python-dotenv
+google-generativeai
+youtube-transcript-api
+requests
